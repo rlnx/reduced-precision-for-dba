@@ -219,7 +219,7 @@ inline Array<float> generate_dataset(std::mt19937& rng,
                                      size_t gauss_terms) {
     auto locs = uniform<float>(rng, -10, 10, { column_count, gauss_terms });
     auto stds = uniform<float>(rng, 1, 10, { column_count, gauss_terms });
-    auto Xt = make_zeros<float>({column_count, row_count});
+    auto Xt = make_empty<float>({column_count, row_count});
 
     float* locs_ptr = locs.data();
     float* stds_ptr = stds.data();
@@ -227,14 +227,12 @@ inline Array<float> generate_dataset(std::mt19937& rng,
 
     for (size_t i = 0; i < column_count; i++) {
         float* column_ptr = &Xt_ptr[i * row_count];
-        for (size_t j = 0; j < gauss_terms; j++) {
+        for (size_t k = 0; k < row_count; k++) {
+            const size_t j = k % gauss_terms;
             const float loc = locs_ptr[i * gauss_terms + j];
             const float std = stds_ptr[i * gauss_terms + j];
             std::normal_distribution<float> distr(loc, std);
-
-            for (size_t k = 0; k < row_count; k++) {
-                column_ptr[k] += distr(rng);
-            }
+            column_ptr[k] = distr(rng);
         }
 
         float min_value =  std::numeric_limits<float>::infinity();
@@ -384,11 +382,33 @@ void write_sigma_range(const std::string& filename,
     }
 }
 
+template <typename F>
+void write_delta(const std::string& filename,
+                 size_t feature_count) {
+    const size_t data_row_count = 500;
+    const size_t gauss_term_count = 5;
+
+    std::mt19937 rng(77777);
+    auto X = generate_dataset(rng, data_row_count, feature_count, gauss_term_count);
+    auto delta = estimate_delta<F>(X);
+    double *delta_ptr = delta.data();
+
+    std::fstream file(filename, std::ios::trunc | std::ios::out);
+    file << "delta" << std::endl;
+    for (size_t i = 0; i < delta.count(); i++) {
+        file << *(delta_ptr++) << std::endl;
+    }
+}
+
 int main(int argc, char const *argv[]) {
     omp_set_num_threads(28);
 
+    write_delta<bf16_tag>("bf16_delta.csv", 5);
+    write_delta<f16_tag>("f16_delta.csv", 50);
+    write_delta<f32_tag>("f32_delta.csv", 5000);
+
     // write_sigma_range<bf16_tag>("bf16_sigma.csv", 100, 1);
-    write_sigma_range<f16_tag>("f16_sigma.csv", 1000, 1);
+    // write_sigma_range<f16_tag>("f16_sigma.csv", 1000, 1);
     // write_sigma_range<f32_tag>("f32_sigma.csv", 10000, 100);
 
     return 0;
