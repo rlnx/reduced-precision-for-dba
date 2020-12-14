@@ -328,7 +328,7 @@ Array<double> estimate_sigma_range(size_t min_feature_count,
                                    size_t max_feature_count,
                                    size_t step) {
     const size_t data_row_count = 500;
-    const size_t gauss_term_count = 5;
+    const size_t gauss_term_count = 1;
     const size_t sigma_row_count = (max_feature_count - min_feature_count) / step +
                                int((max_feature_count - min_feature_count) % step > 0);
     auto sigmas = make_empty<double>({ sigma_row_count, 2 });
@@ -386,17 +386,20 @@ template <typename F>
 void write_delta(const std::string& filename,
                  size_t feature_count) {
     const size_t data_row_count = 500;
-    const size_t gauss_term_count = 5;
+    const size_t gauss_term_count = 1;
 
     std::mt19937 rng(77777);
     auto X = generate_dataset(rng, data_row_count, feature_count, gauss_term_count);
-    auto delta = estimate_delta<F>(X);
+    Array<double> D_exact = compute_distances_exact(X, 5000);
+    Array<double> D_approx = compute_distances_approx<F>(X, 5000);
+    auto delta = D_approx - D_exact;
+    double *D_exact_ptr = D_exact.data();
     double *delta_ptr = delta.data();
 
     std::fstream file(filename, std::ios::trunc | std::ios::out);
-    file << "delta" << std::endl;
+    file << "distance,delta" << std::endl;
     for (size_t i = 0; i < delta.count(); i++) {
-        file << *(delta_ptr++) << std::endl;
+        file << *(D_exact_ptr++) << "," << *(delta_ptr++) << std::endl;
     }
 }
 
@@ -407,9 +410,9 @@ int main(int argc, char const *argv[]) {
     write_delta<f16_tag>("f16_delta.csv", 50);
     write_delta<f32_tag>("f32_delta.csv", 5000);
 
-    // write_sigma_range<bf16_tag>("bf16_sigma.csv", 100, 1);
-    // write_sigma_range<f16_tag>("f16_sigma.csv", 1000, 1);
-    // write_sigma_range<f32_tag>("f32_sigma.csv", 10000, 100);
+    write_sigma_range<bf16_tag>("bf16_sigma.csv", 100, 1);
+    write_sigma_range<f16_tag>("f16_sigma.csv", 1000, 1);
+    write_sigma_range<f32_tag>("f32_sigma.csv", 10000, 100);
 
     return 0;
 }
